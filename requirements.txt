@@ -1,0 +1,26 @@
+# AI Risk Manager — pinned dependencies
+# Python 3.11 required
+
+# --- Model & ML ---
+xgboost>=2.0,<3.0          # gradient-boosted trees for fraud scoring
+imbalanced-learn>=0.12      # SMOTE oversampling for class imbalance
+scikit-learn>=1.4           # train/test split, metrics, preprocessing
+pandas>=2.1                 # tabular data handling
+numpy>=1.26                 # numerical ops (pandas/sklearn dep anyway)
+joblib>=1.3                 # model serialization (sklearn bundles it, but explicit is better)
+
+# --- Explainability ---
+shap>=0.45                  # TreeExplainer for per-prediction explanations
+
+# --- API ---
+fastapi>=0.110              # async web framework
+uvicorn[standard]>=0.27     # ASGI server to run FastAPI
+python-jose[cryptography]>=3.3  # JWT token verification (lighter than fastapi-users)
+pydantic>=2.5               # request/response validation (FastAPI dep, pinned for clarity)
+
+# --- Frontend templating (optional, using StaticFiles primarily) ---
+jinja2>=3.1                 # in case we need server-rendered pages
+aiofiles>=23.0              # required by FastAPI's StaticFiles
+
+# --- Dev / convenience ---
+matplotlib>=3.8             # PR-curve plots in Stage 2 validation

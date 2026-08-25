@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Data (large files — regenerate via scripts)
+data/kaggle/
+
+# Model artifacts (regenerate via train_model.py)
+# Uncomment the next line if you don't want to track the .pkl in git
+# model/risk_model.pkl
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Agents
+.agents/
