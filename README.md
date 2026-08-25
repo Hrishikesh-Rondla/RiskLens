@@ -19,6 +19,7 @@ Payment processors handle millions of transactions daily. Each one needs a fraud
 |              Frontend (Dashboard)             |
 |         static/index.html + main.js           |
 |  Polls /flagged-transactions every 3 seconds  |
+|  SHAP waterfall | Histogram | Threshold tuner |
 +---------------------+------------------------+
                       |
                       | HTTP (JWT-secured)
@@ -30,13 +31,13 @@ Payment processors handle millions of transactions daily. Each one needs a fraud
 |    1. Validate input (Pydantic)                |
 |    2. preprocess_features() [train/serve sync] |
 |    3. XGBoost predict_proba()                  |
-|    4. SHAP TreeExplainer -> top 3 reasons      |
+|    4. SHAP TreeExplainer -> all feature values  |
 |    5. assign_tier() -> auto_allow/review/block |
 |    6. Log to in-memory deque                   |
-|    7. Return JSON response                     |
+|    7. Return JSON with shap_details[]          |
 |                                                |
-|  GET /flagged-transactions                     |
-|    -> Returns in-memory transaction log        |
+|  GET  /flagged-transactions                    |
+|  POST /api/simulate-thresholds                 |
 +-----+--------------------+-------------------+
       |                    |
       v                    v
@@ -82,11 +83,19 @@ JSON Response:
         "High transaction count this week increased risk",
         "UPI payment method decreased risk",
         "New merchant increased risk"
-    ]
+    ],
+    "shap_details": [
+        {"feature": "merchant_txn_count_7d", "shap_value": 2.14, "reason": "..."},
+        ...
+    ],
+    "base_value": -0.004
 }
     |
     v
 Logged to in-memory store --> Dashboard polls and displays
+                              |-> SHAP waterfall chart (per-txn)
+                              |-> Risk score histogram (all txns)
+                              |-> Threshold tuning sliders
 ```
 
 ---
@@ -155,7 +164,42 @@ These are **specific, not generic** — each one has a reason and a mitigation p
 
 6. **SHAP explanations are in log-odds space.** TreeExplainer works in XGBoost's raw output space (log-odds), not probability space. SHAP values sum to the log-odds prediction, not the probability. This is mathematically correct but can be confusing when presented to non-technical stakeholders.
 
-7. **Threshold tuning is manual.** The 0.3/0.7 tier thresholds are based on one test-set evaluation. Production would use cost-sensitive optimization (minimize total cost = fraud_loss × FN + review_cost × FP + block_cost × legitimate_blocks).
+7. **Threshold tuning is manual.** The 0.3/0.7 tier thresholds are based on one test-set evaluation. Production would use cost-sensitive optimization (minimize total cost = fraud_loss x FN + review_cost x FP + block_cost x legitimate_blocks). The dashboard's threshold tuning sliders let you explore this tradeoff interactively.
+
+---
+
+## Dashboard Features
+
+The dashboard is a dark-mode glassmorphic monitoring interface with three interactive features beyond the basic transaction table:
+
+### 1. SHAP Waterfall Chart (click any transaction row)
+
+A per-prediction explainability view showing how each feature pushed the risk score up or down:
+
+- **Diverging center-zero bar layout** — red bars (right) increase risk, blue bars (left) decrease risk
+- Sorted by absolute SHAP contribution (most impactful features first)
+- Displays base value (model's average prediction) and final risk score
+- Shows raw feature values alongside SHAP contributions
+- Pure CSS implementation — no charting library, GPU-accelerated transitions
+
+### 2. Risk Score Distribution Histogram
+
+A real-time view of the model's decision landscape across all scored transactions:
+
+- **Inline SVG** with 20 bins (0.05 step each) — vector-crisp on Retina/4K displays
+- Color-coded by tier: green (<0.3), amber (0.3-0.7), red (>0.7)
+- Threshold boundary lines at 0.3 and 0.7
+- Hover tooltips showing bin ranges and transaction counts
+
+### 3. Live Threshold Tuning Sliders
+
+Interactive "what-if" analysis for tier thresholds — the feature that turns a static demo into a conversation:
+
+- Two range sliders for **auto_allow ceiling** and **auto_block floor**
+- Calls `POST /api/simulate-thresholds` with debounced (300ms) API requests
+- Displays simulated tier distribution as colored bars with counts and percentages
+- Example: dragging auto_block from 0.7 to 0.6 instantly shows "that would block 66.7% instead of 3.3%"
+- Does NOT change actual model thresholds — purely a simulation overlay
 
 ---
 
@@ -248,6 +292,12 @@ curl -X POST http://127.0.0.1:8000/score-transaction \
 # View scored transactions
 curl -H "Authorization: Bearer <TOKEN>" \
   http://127.0.0.1:8000/flagged-transactions
+
+# Simulate different thresholds
+curl -X POST http://127.0.0.1:8000/api/simulate-thresholds \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"allow_ceiling": 0.2, "block_floor": 0.6}'
 ```
 
 ---
@@ -287,6 +337,6 @@ RiskLens/
 
 ## Author
 
-**Hrishikesh Rondla** — Solo build for Razorpay AI Buildathon 2024
+**Hrishikesh Rondla** — Solo build for Razorpay AI Buildathon 2026
 
 ---
