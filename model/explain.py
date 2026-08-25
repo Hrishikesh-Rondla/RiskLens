@@ -72,6 +72,24 @@ from train.train_model import preprocess_features
 # ---------------------------------------------------------------------------
 MODEL_PATH = os.path.join(PROJECT_ROOT, 'model', 'risk_model.pkl')
 FEATURE_COLS_PATH = os.path.join(PROJECT_ROOT, 'model', 'feature_columns.pkl')
+SYNTHETIC_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'synthetic_transactions.csv')
+
+# ---------------------------------------------------------------------------
+# FEATURE MEDIANS — precomputed from data/synthetic_transactions.csv
+# ---------------------------------------------------------------------------
+# WHY hardcoded (not computed at import time)?
+# 1. Avoids I/O at module import — the CSV may not exist in a test env.
+# 2. Values are stable (dataset is fixed after Stage 1).
+# 3. If the dataset is regenerated, re-run:
+#      python -c "import pandas as pd; df=pd.read_csv('data/synthetic_transactions.csv'); \
+#        print(df[['amount_inr','merchant_txn_count_7d']].median())"
+#    and update these two constants.
+# Used by explain_prediction() to determine whether a feature value is
+# objectively "high" or "low" relative to the dataset, independent of
+# the SHAP sign.
+# ---------------------------------------------------------------------------
+MEDIAN_AMOUNT_INR = 989.45
+MEDIAN_MERCHANT_TXN_COUNT_7D = 24.0
 
 # ---------------------------------------------------------------------------
 # PLAIN-LANGUAGE FEATURE NAME MAPPING
@@ -88,10 +106,21 @@ FEATURE_COLS_PATH = os.path.join(PROJECT_ROOT, 'model', 'feature_columns.pkl')
 # high SHAP value, making the explanation more actionable.
 # ---------------------------------------------------------------------------
 FEATURE_DESCRIPTIONS = {
+    # amount_inr and merchant_txn_count_7d use value-aware templates:
+    # The magnitude word (high/low) is chosen by comparing the actual
+    # feature value against the dataset median, NOT from the SHAP sign.
+    # The directional word (increased/decreased risk) still comes from
+    # the SHAP sign. This prevents mislabeling — e.g. a ₹500 txn should
+    # never say "Unusually high transaction amount" just because its
+    # SHAP contribution happened to be positive.
     'amount_inr': {
         'name': 'Transaction amount',
-        'high': 'Unusually high transaction amount increased risk',
-        'low': 'Low transaction amount decreased risk',
+        'high_increased': 'Unusually high transaction amount increased risk',
+        'high_decreased': 'Unusually high transaction amount decreased risk',
+        'low_increased': 'Low transaction amount increased risk',
+        'low_decreased': 'Low transaction amount decreased risk',
+        'value_aware': True,
+        'median': MEDIAN_AMOUNT_INR,
     },
     'hour_of_day': {
         'name': 'Transaction hour',
@@ -100,8 +129,12 @@ FEATURE_DESCRIPTIONS = {
     },
     'merchant_txn_count_7d': {
         'name': 'Weekly transaction count',
-        'high': 'High transaction count this week increased risk',
-        'low': 'Normal transaction volume decreased risk',
+        'high_increased': 'High transaction count this week increased risk',
+        'high_decreased': 'High transaction count this week decreased risk',
+        'low_increased': 'Normal transaction volume increased risk',
+        'low_decreased': 'Normal transaction volume decreased risk',
+        'value_aware': True,
+        'median': MEDIAN_MERCHANT_TXN_COUNT_7D,
     },
     'merchant_avg_amount_7d': {
         'name': "Merchant's average transaction amount",
@@ -193,10 +226,18 @@ def init_explainer():
         # length-2 → [class_0, class_1], take class_1 (fraud)
         # length-1 → single output, take [0]
         base_val = float(base_val[-1])
+    # NOTE: base_val is in log-odds (margin) space, NOT probability space.
+    # For XGBoost binary classification, TreeExplainer operates on the raw
+    # margin output. A base_val near 0.0 corresponds to ~50% probability
+    # via the logistic function, but the actual mean predicted probability
+    # is ~0.11 (reflecting the 4.76% fraud rate after SMOTE rebalancing).
+    # Each SHAP value is a log-odds delta — its sign (positive = toward
+    # fraud, negative = toward legitimate) is still correct for directional
+    # explanations, even though the raw magnitude is not a probability.
     print(f"SHAP TreeExplainer initialized.")
     print(f"  Model: {MODEL_PATH}")
     print(f"  Features: {len(_feature_columns)} columns")
-    print(f"  Expected base value (avg predicted fraud prob): {base_val:.4f}")
+    print(f"  Expected base value (log-odds / margin space): {base_val:.4f}")
 
 
 def explain_prediction(
@@ -304,7 +345,18 @@ def explain_prediction(
         # "New merchant increased risk" is more actionable than just
         # "New merchant". The direction tells the reviewer whether to
         # focus on this feature or dismiss it.
-        if sv > 0:
+        #
+        # For value-aware features (amount_inr, merchant_txn_count_7d),
+        # the magnitude word (high/low) comes from the actual feature
+        # value vs the dataset median, and the directional word
+        # (increased/decreased) comes from the SHAP sign. This prevents
+        # mislabeling — e.g. amount_inr=500 should never say "Unusually
+        # high transaction amount" regardless of SHAP sign.
+        if desc.get('value_aware'):
+            magnitude = 'high' if feat_val >= desc['median'] else 'low'
+            direction = 'increased' if sv > 0 else 'decreased'
+            reason = desc[f'{magnitude}_{direction}']
+        elif sv > 0:
             reason = desc['high']
         else:
             reason = desc['low']
@@ -324,12 +376,19 @@ def explain_prediction(
 
 def get_base_value() -> float:
     """
-    Return the explainer's expected (base) value.
+    Return the explainer's expected (base) value in log-odds (margin) space.
     
-    This is the average model output across the training set — it's the
-    prediction you'd get with zero information about a specific transaction.
-    Useful for the dashboard to show "model starts at X, then adjusts
-    based on these features."
+    This is the average raw model output (log-odds) across the training set.
+    It is NOT a probability — a value near 0.0 corresponds to ~50% via the
+    logistic function. The actual mean predicted fraud probability is ~0.11.
+    
+    Each per-feature SHAP value represents a log-odds contribution that
+    shifts the prediction away from this base. The sign is still meaningful
+    for directional explanations (positive = toward fraud), even though
+    the raw magnitude is a log-odds delta, not a probability delta.
+    
+    Useful for the dashboard waterfall chart to show "model starts at
+    base_value, then each feature adjusts by its SHAP contribution."
     """
     if _explainer is None:
         raise RuntimeError(
