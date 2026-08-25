@@ -62,7 +62,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from train.train_model import preprocess_features
-from model.explain import init_explainer, explain_prediction
+from model.explain import init_explainer, explain_prediction, get_base_value
 from model.tiering import assign_tier, get_tier_info, get_all_tiers
 import joblib
 
@@ -159,10 +159,18 @@ class TransactionInput(BaseModel):
     )
 
 
+class ShapDetail(BaseModel):
+    """Individual SHAP feature contribution for waterfall chart."""
+    feature: str
+    shap_value: float
+    reason: str
+
+
 class ScoringResponse(BaseModel):
     """
     Schema for the scoring API response.
-    Matches the DATA FLOW spec exactly.
+    Matches the DATA FLOW spec exactly, plus SHAP details for
+    the interactive waterfall chart (dashboard enhancement).
     """
     transaction_id: str
     risk_score: float
@@ -170,10 +178,15 @@ class ScoringResponse(BaseModel):
     tier_label: str
     tier_color: str
     top_reasons: list[str]
+    shap_details: list[ShapDetail]  # Full SHAP breakdown for waterfall chart
+    base_value: float               # Model's base prediction (avg fraud prob)
     scored_at: str
     merchant_id: str
     amount_inr: float
     payment_method: str
+    hour_of_day: int
+    device_risk_score: float
+    is_new_merchant: int
 
 
 # ---------------------------------------------------------------------------
@@ -359,9 +372,12 @@ async def score_transaction(
     risk_score = float(_model.predict_proba(features)[0][1])
     
     # --- SHAP explanation ---
-    # Returns top 3 contributing features with plain-language reasons.
-    shap_reasons = explain_prediction(txn_dict, top_n=3)
-    top_reasons = [r['reason'] for r in shap_reasons]
+    # Returns top N contributing features with plain-language reasons.
+    # We get all features for the waterfall chart, but top_reasons uses 3.
+    shap_all = explain_prediction(txn_dict, top_n=10)
+    shap_top3 = shap_all[:3]
+    top_reasons = [r['reason'] for r in shap_top3]
+    shap_details = [ShapDetail(**r) for r in shap_all]
     
     # --- Assign confidence tier ---
     tier = assign_tier(risk_score)
@@ -376,10 +392,15 @@ async def score_transaction(
         tier_label=tier_info['label'],
         tier_color=tier_info['color'],
         top_reasons=top_reasons,
+        shap_details=[s.model_dump() for s in shap_details],
+        base_value=round(get_base_value(), 4),
         scored_at=scored_at,
         merchant_id=txn.merchant_id,
         amount_inr=txn.amount_inr,
         payment_method=txn.payment_method,
+        hour_of_day=txn.hour_of_day,
+        device_risk_score=txn.device_risk_score,
+        is_new_merchant=txn.is_new_merchant,
     )
     
     # --- Log to in-memory store ---
@@ -435,6 +456,60 @@ async def generate_token():
         "token": token,
         "expires_in_hours": JWT_EXPIRATION_HOURS,
         "usage": f"Authorization: Bearer {token}",
+    }
+
+
+@app.post("/api/simulate-thresholds")
+async def simulate_thresholds(
+    request: Request,
+    user: str = Depends(verify_token)
+):
+    """
+    Simulate what the tier distribution would look like with different
+    thresholds, WITHOUT changing the actual thresholds.
+    
+    WHY this endpoint?
+    Lets a panelist drag a slider and see "if I set auto_block to 0.6
+    instead of 0.7, what % of transactions would be blocked?" — this
+    is the kind of interactive demo that impresses technical panels.
+    
+    Request body: {"allow_ceiling": 0.3, "block_floor": 0.7}
+    Response: tier counts + percentages at those thresholds
+    """
+    body = await request.json()
+    allow_ceiling = float(body.get('allow_ceiling', 0.3))
+    block_floor = float(body.get('block_floor', 0.7))
+    
+    if allow_ceiling >= block_floor:
+        raise HTTPException(
+            status_code=400,
+            detail="allow_ceiling must be less than block_floor"
+        )
+    
+    txns = list(transaction_log)
+    total = len(txns)
+    
+    if total == 0:
+        return {
+            "total": 0,
+            "allow_ceiling": allow_ceiling,
+            "block_floor": block_floor,
+            "auto_allow": {"count": 0, "pct": 0},
+            "human_review": {"count": 0, "pct": 0},
+            "auto_block": {"count": 0, "pct": 0},
+        }
+    
+    allow_count = sum(1 for t in txns if t['risk_score'] < allow_ceiling)
+    block_count = sum(1 for t in txns if t['risk_score'] > block_floor)
+    review_count = total - allow_count - block_count
+    
+    return {
+        "total": total,
+        "allow_ceiling": allow_ceiling,
+        "block_floor": block_floor,
+        "auto_allow": {"count": allow_count, "pct": round(allow_count / total * 100, 1)},
+        "human_review": {"count": review_count, "pct": round(review_count / total * 100, 1)},
+        "auto_block": {"count": block_count, "pct": round(block_count / total * 100, 1)},
     }
 
 

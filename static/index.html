@@ -3,560 +3,562 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RiskLens - AI Risk Manager Dashboard</title>
-    <meta name="description" content="Real-time AI-powered transaction fraud scoring dashboard with XGBoost and SHAP explainability">
-    
-    <!-- Google Fonts — Inter for clean, modern typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <title>RiskLens Fraud Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        /* ==============================================================
-           CSS DESIGN SYSTEM — RiskLens Dashboard
-           
-           Design philosophy: Dark-mode glassmorphism with vibrant 
-           accent colors. The goal is to look like a real-time monitoring
-           tool (think Datadog/Grafana), not a basic CRUD admin panel.
-        ============================================================== */
-        
         :root {
-            /* --- Color palette --- */
             --bg-primary: #0a0e1a;
             --bg-secondary: #111827;
-            --bg-card: rgba(17, 24, 39, 0.7);
-            --bg-glass: rgba(255, 255, 255, 0.03);
-            --border-subtle: rgba(255, 255, 255, 0.06);
-            --border-glow: rgba(99, 102, 241, 0.3);
-            
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --text-muted: #64748b;
-            
-            --accent-indigo: #818cf8;
-            --accent-blue: #60a5fa;
-            --accent-cyan: #22d3ee;
-            
-            --tier-allow: #22c55e;
-            --tier-allow-bg: rgba(34, 197, 94, 0.1);
-            --tier-review: #f59e0b;
-            --tier-review-bg: rgba(245, 158, 11, 0.1);
-            --tier-block: #ef4444;
-            --tier-block-bg: rgba(239, 68, 68, 0.1);
-            
-            /* --- Spacing --- */
-            --space-xs: 4px;
-            --space-sm: 8px;
-            --space-md: 16px;
-            --space-lg: 24px;
-            --space-xl: 32px;
-            --space-2xl: 48px;
-            
-            /* --- Typography --- */
-            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
-            
-            /* --- Borders --- */
-            --radius-sm: 8px;
-            --radius-md: 12px;
-            --radius-lg: 16px;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --color-allow: #22c55e;
+            --color-review: #f59e0b;
+            --color-block: #ef4444;
+            --color-accent: #3b82f6;
         }
-        
-        /* --- Reset & Base --- */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: var(--font-sans);
-            background: var(--bg-primary);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-primary);
             color: var(--text-primary);
-            min-height: 100vh;
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
+            overflow-x: hidden;
         }
-        
-        /* Animated gradient background */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: 
-                radial-gradient(ellipse at 20% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(34, 211, 238, 0.06) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 50%, rgba(139, 92, 246, 0.04) 0%, transparent 60%);
-            z-index: -1;
-            animation: bgPulse 8s ease-in-out infinite alternate;
-        }
-        
-        @keyframes bgPulse {
-            0% { opacity: 0.7; }
-            100% { opacity: 1; }
-        }
-        
-        /* --- Layout --- */
+
         .container {
             max-width: 1400px;
             margin: 0 auto;
-            padding: var(--space-lg);
+            padding: 2rem;
         }
-        
-        /* --- Header --- */
-        .header {
+
+        /* Glassmorphism utility */
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+        }
+
+        /* Header */
+        header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: var(--space-lg) 0;
-            margin-bottom: var(--space-xl);
-            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 2rem;
         }
-        
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: var(--space-md);
-        }
-        
-        .logo {
-            width: 42px;
-            height: 42px;
-            background: linear-gradient(135deg, var(--accent-indigo), var(--accent-cyan));
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            font-weight: 800;
-            color: white;
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
-        }
-        
-        .header h1 {
-            font-size: 1.5rem;
+
+        h1 {
+            font-size: 1.75rem;
             font-weight: 700;
-            background: linear-gradient(135deg, var(--text-primary), var(--accent-indigo));
+            background: linear-gradient(90deg, #60a5fa, #a78bfa);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
         }
-        
-        .header h1 span {
-            font-weight: 400;
-            color: var(--text-secondary);
-            -webkit-text-fill-color: var(--text-secondary);
-        }
-        
+
         .status-badge {
             display: flex;
             align-items: center;
-            gap: var(--space-sm);
-            padding: 6px 14px;
-            background: var(--bg-glass);
-            border: 1px solid var(--border-subtle);
-            border-radius: 20px;
-            font-size: 0.8rem;
-            color: var(--text-secondary);
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-size: 0.875rem;
+            font-weight: 500;
         }
         
-        .status-dot {
+        .status-badge.live {
+            background-color: rgba(34, 197, 94, 0.1);
+            color: var(--color-allow);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+        }
+        .status-badge.disconnected {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--color-block);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: var(--tier-allow);
-            animation: pulse 2s ease-in-out infinite;
         }
-        
-        .status-dot.disconnected {
-            background: var(--tier-block);
-            animation: none;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
-            50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
-        }
-        
-        /* --- Stats cards row --- */
+        .live .dot { background-color: var(--color-allow); box-shadow: 0 0 8px var(--color-allow); }
+        .disconnected .dot { background-color: var(--color-block); }
+
+        /* Stats Cards */
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: var(--space-md);
-            margin-bottom: var(--space-xl);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
-        
+
         .stat-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md);
-            padding: var(--space-lg);
-            position: relative;
-            overflow: hidden;
-            transition: border-color 0.3s ease, transform 0.2s ease;
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
         }
-        
-        .stat-card:hover {
-            border-color: var(--border-glow);
-            transform: translateY(-2px);
-        }
-        
-        .stat-card::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 2px;
-        }
-        
-        .stat-card:nth-child(1)::after { background: linear-gradient(90deg, var(--accent-indigo), transparent); }
-        .stat-card:nth-child(2)::after { background: linear-gradient(90deg, var(--tier-allow), transparent); }
-        .stat-card:nth-child(3)::after { background: linear-gradient(90deg, var(--tier-review), transparent); }
-        .stat-card:nth-child(4)::after { background: linear-gradient(90deg, var(--tier-block), transparent); }
-        
-        .stat-label {
-            font-size: 0.75rem;
-            font-weight: 500;
+
+        .stat-title {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: var(--text-muted);
-            margin-bottom: var(--space-sm);
         }
-        
+
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
-            font-family: var(--font-mono);
-            line-height: 1.2;
+            font-family: 'JetBrains Mono', monospace;
         }
         
-        .stat-subtitle {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-            margin-top: var(--space-xs);
+        .stat-sub {
+            font-size: 0.875rem;
+        }
+
+        /* Two Column Section */
+        .analytics-section {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
         
-        /* --- Controls bar --- */
-        .controls {
+        @media (max-width: 900px) {
+            .analytics-section { grid-template-columns: 1fr; }
+        }
+
+        .panel {
+            padding: 1.5rem;
+        }
+
+        .panel-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: var(--space-md);
-            gap: var(--space-md);
+        }
+
+        /* Histogram */
+        #histogram-container {
+            width: 100%;
+            height: 200px;
+            position: relative;
         }
         
-        .controls-left {
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        /* Threshold Sliders */
+        .slider-group {
+            margin-bottom: 1.5rem;
+        }
+        .slider-header {
             display: flex;
-            gap: var(--space-sm);
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        input[type=range] {
+            width: 100%;
+            accent-color: var(--color-accent);
         }
         
-        .filter-btn {
-            padding: 8px 16px;
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-sm);
-            background: var(--bg-glass);
-            color: var(--text-secondary);
-            font-family: var(--font-sans);
-            font-size: 0.8rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s ease;
+        .simulation-results {
+            margin-top: 1rem;
         }
-        
-        .filter-btn:hover {
-            border-color: var(--accent-indigo);
-            color: var(--text-primary);
-        }
-        
-        .filter-btn.active {
-            background: rgba(99, 102, 241, 0.15);
-            border-color: var(--accent-indigo);
-            color: var(--accent-indigo);
-        }
-        
-        .simulate-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: var(--radius-sm);
-            background: linear-gradient(135deg, var(--accent-indigo), #6366f1);
-            color: white;
-            font-family: var(--font-sans);
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
-        }
-        
-        .simulate-btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
-        }
-        
-        .simulate-btn:active {
-            transform: translateY(0);
-        }
-        
-        .simulate-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        /* --- Transactions table --- */
-        .table-wrapper {
-            background: var(--bg-card);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-lg);
+        .sim-bar-container {
+            display: flex;
+            height: 24px;
+            border-radius: 4px;
             overflow: hidden;
+            margin-top: 0.5rem;
         }
-        
-        .table-header-bar {
+        .sim-bar {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+            transition: width 0.3s ease;
+        }
+
+        /* Controls */
+        .controls-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: var(--space-md) var(--space-lg);
-            border-bottom: 1px solid var(--border-subtle);
+            margin-bottom: 1rem;
+        }
+
+        .filters {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
         }
         
-        .table-title {
-            font-size: 0.95rem;
-            font-weight: 600;
+        button.active {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
         }
         
-        .table-count {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            font-family: var(--font-mono);
+        .btn-primary {
+            background: var(--color-accent);
+            border-color: var(--color-accent);
+        }
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        /* Table */
+        .table-container {
+            overflow-x: auto;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-        }
-        
-        thead th {
-            padding: var(--space-sm) var(--space-md);
             text-align: left;
-            font-size: 0.7rem;
-            font-weight: 600;
+        }
+        
+        th, td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        th {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-weight: 500;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-subtle);
-            background: rgba(255, 255, 255, 0.01);
-            position: sticky;
-            top: 0;
         }
-        
+
         tbody tr {
-            transition: background 0.15s ease;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-4px); }
-            to { opacity: 1; transform: translateY(0); }
+            transition: background-color 0.2s;
+            cursor: pointer;
         }
         
         tbody tr:hover {
-            background: rgba(255, 255, 255, 0.02);
+            background-color: rgba(255,255,255,0.02);
         }
         
-        tbody td {
-            padding: var(--space-sm) var(--space-md);
-            font-size: 0.85rem;
-            border-bottom: 1px solid var(--border-subtle);
-            vertical-align: middle;
-        }
-        
-        .txn-id {
-            font-family: var(--font-mono);
-            font-size: 0.8rem;
-            color: var(--accent-blue);
-        }
-        
-        .merchant-id {
-            font-family: var(--font-mono);
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-        
-        .amount {
-            font-family: var(--font-mono);
-            font-weight: 600;
-        }
-        
-        .score {
-            font-family: var(--font-mono);
-            font-weight: 600;
-        }
-        
-        /* --- Tier badges --- */
         .tier-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 12px;
-            border-radius: 20px;
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
             font-size: 0.75rem;
             font-weight: 600;
-            letter-spacing: 0.02em;
-            white-space: nowrap;
+            text-transform: uppercase;
         }
         
-        .tier-badge .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-        }
-        
-        .tier-auto_allow { background: var(--tier-allow-bg); color: var(--tier-allow); }
-        .tier-auto_allow .dot { background: var(--tier-allow); }
-        
-        .tier-human_review { background: var(--tier-review-bg); color: var(--tier-review); }
-        .tier-human_review .dot { background: var(--tier-review); }
-        
-        .tier-auto_block { background: var(--tier-block-bg); color: var(--tier-block); }
-        .tier-auto_block .dot { background: var(--tier-block); }
-        
-        /* --- Reason pills --- */
-        .reason-pill {
+        .pill {
             display: inline-block;
-            padding: 3px 10px;
-            margin: 2px 4px 2px 0;
-            border-radius: 12px;
-            font-size: 0.72rem;
-            background: var(--bg-glass);
-            border: 1px solid var(--border-subtle);
+            padding: 0.2rem 0.5rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-right: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .modal-overlay.active {
+            display: block;
+            opacity: 1;
+        }
+
+        .modal-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            max-width: 600px;
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border-color);
+            z-index: 101;
+            transform: translateX(100%);
+            transition: transform 0.3s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        .modal-panel.active {
+            transform: translateX(0);
+        }
+
+        .modal-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            line-height: 1;
             color: var(--text-secondary);
-            line-height: 1.4;
+            padding: 0;
+        }
+        .modal-close:hover {
+            color: white;
+            background: transparent;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .waterfall-container {
+            margin-top: 2rem;
+            position: relative;
         }
         
-        /* --- Empty state --- */
-        .empty-state {
-            text-align: center;
-            padding: var(--space-2xl) var(--space-lg);
-            color: var(--text-muted);
+        .waterfall-row {
+            display: flex;
+            margin-bottom: 0.5rem;
+            align-items: center;
         }
         
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: var(--space-md);
-            opacity: 0.5;
+        .wf-label {
+            width: 40%;
+            font-size: 0.875rem;
+            text-align: right;
+            padding-right: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         
-        .empty-state h3 {
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: var(--space-sm);
+        .wf-chart-area {
+            width: 60%;
+            position: relative;
+            height: 24px;
+            border-left: 1px solid var(--border-color); /* Center line for 0 */
         }
         
-        .empty-state p {
-            font-size: 0.85rem;
-            max-width: 400px;
-            margin: 0 auto;
+        .wf-bar {
+            position: absolute;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            padding: 0 4px;
+            color: white;
+            border-radius: 2px;
         }
-        
-        /* --- Responsive --- */
-        @media (max-width: 900px) {
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .controls { flex-direction: column; align-items: stretch; }
-            .header { flex-direction: column; gap: var(--space-md); }
+        .wf-bar.positive {
+            background: rgba(239, 68, 68, 0.8);
+            left: 50%;
+            justify-content: flex-start;
+            transform-origin: left center;
         }
-        
-        @media (max-width: 600px) {
-            .stats-grid { grid-template-columns: 1fr; }
-            .container { padding: var(--space-md); }
+        .wf-bar.negative {
+            background: rgba(59, 130, 246, 0.8);
+            right: 50%;
+            justify-content: flex-end;
+            transform-origin: right center;
         }
-        
-        /* --- Scrollbar styling --- */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        .prediction-summary {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px dashed var(--border-color);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+        }
+
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <div class="logo">R</div>
-                <h1>RiskLens <span>AI Risk Manager</span></h1>
-            </div>
-            <div class="status-badge" id="statusBadge">
-                <div class="status-dot" id="statusDot"></div>
-                <span id="statusText">Connecting...</span>
+        <header>
+            <h1>RiskLens Dashboard</h1>
+            <div id="statusBadge" class="status-badge disconnected">
+                <div class="dot"></div>
+                <span id="statusText">Disconnected</span>
             </div>
         </header>
-        
-        <!-- Stats cards -->
+
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-label">Total Scored</div>
-                <div class="stat-value" id="statTotal">0</div>
-                <div class="stat-subtitle">transactions processed</div>
+            <div class="stat-card glass">
+                <div class="stat-title">Total Transactions</div>
+                <div id="statTotal" class="stat-value">0</div>
+                <div class="stat-sub text-secondary">last 24 hours</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Auto Allowed</div>
-                <div class="stat-value" id="statAllow" style="color: var(--tier-allow);">0</div>
-                <div class="stat-subtitle" id="statAllowPct">0% of total</div>
+            <div class="stat-card glass" style="border-top: 3px solid var(--color-allow)">
+                <div class="stat-title">Auto Allow</div>
+                <div id="statAllow" class="stat-value">0</div>
+                <div id="statAllowPct" class="stat-sub" style="color: var(--color-allow)">0%</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Human Review</div>
-                <div class="stat-value" id="statReview" style="color: var(--tier-review);">0</div>
-                <div class="stat-subtitle" id="statReviewPct">0% of total</div>
+            <div class="stat-card glass" style="border-top: 3px solid var(--color-review)">
+                <div class="stat-title">Human Review</div>
+                <div id="statReview" class="stat-value">0</div>
+                <div id="statReviewPct" class="stat-sub" style="color: var(--color-review)">0%</div>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Auto Blocked</div>
-                <div class="stat-value" id="statBlock" style="color: var(--tier-block);">0</div>
-                <div class="stat-subtitle" id="statBlockPct">0% of total</div>
+            <div class="stat-card glass" style="border-top: 3px solid var(--color-block)">
+                <div class="stat-title">Auto Block</div>
+                <div id="statBlock" class="stat-value">0</div>
+                <div id="statBlockPct" class="stat-sub" style="color: var(--color-block)">0%</div>
             </div>
         </div>
-        
-        <!-- Controls -->
-        <div class="controls">
-            <div class="controls-left">
-                <button class="filter-btn active" data-filter="all" onclick="setFilter('all')">All</button>
-                <button class="filter-btn" data-filter="auto_allow" onclick="setFilter('auto_allow')">Auto Allow</button>
-                <button class="filter-btn" data-filter="human_review" onclick="setFilter('human_review')">Human Review</button>
-                <button class="filter-btn" data-filter="auto_block" onclick="setFilter('auto_block')">Auto Block</button>
+
+        <div class="analytics-section">
+            <div class="panel glass">
+                <div class="panel-title">Risk Score Distribution</div>
+                <div id="histogram-container"></div>
             </div>
-            <button class="simulate-btn" id="simulateBtn" onclick="simulateTransaction()">
-                Simulate Transaction
-            </button>
-        </div>
-        
-        <!-- Transactions table -->
-        <div class="table-wrapper">
-            <div class="table-header-bar">
-                <span class="table-title">Scored Transactions</span>
-                <span class="table-count" id="tableCount">0 transactions</span>
-            </div>
-            <div id="tableContainer">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Transaction ID</th>
-                            <th>Merchant</th>
-                            <th>Method</th>
-                            <th>Amount (INR)</th>
-                            <th>Risk Score</th>
-                            <th>Tier</th>
-                            <th>Top Reason</th>
-                        </tr>
-                    </thead>
-                    <tbody id="txnTableBody">
-                    </tbody>
-                </table>
-                <div class="empty-state" id="emptyState">
-                    <div class="empty-state-icon">&#128737;</div>
-                    <h3>No transactions scored yet</h3>
-                    <p>Click "Simulate Transaction" to generate a sample transaction, or POST to /score-transaction via the API.</p>
+            <div class="panel glass">
+                <div class="panel-title">Threshold Tuning</div>
+                
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Auto Allow Ceiling</span>
+                        <span id="allowCeilVal" class="mono">0.3</span>
+                    </div>
+                    <input type="range" id="allowSlider" min="0" max="1" step="0.01" value="0.3">
+                </div>
+                
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Auto Block Floor</span>
+                        <span id="blockFloorVal" class="mono">0.7</span>
+                    </div>
+                    <input type="range" id="blockSlider" min="0" max="1" step="0.01" value="0.7">
+                </div>
+                
+                <div class="simulation-results">
+                    <div class="slider-header" style="color: var(--text-secondary)">Simulated Impact</div>
+                    <div class="sim-bar-container" id="simBarContainer">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div id="simStatsText" style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-top: 0.5rem; color: var(--text-secondary)">
+                        <!-- Filled by JS -->
+                    </div>
                 </div>
             </div>
         </div>
+
+        <div class="controls-bar">
+            <div class="filters" id="tierFilters">
+                <button data-tier="all" class="active">All</button>
+                <button data-tier="auto_allow">Auto Allow</button>
+                <button data-tier="human_review">Review</button>
+                <button data-tier="auto_block">Auto Block</button>
+            </div>
+            <button id="btnSimulate" class="btn-primary" title="Hold Shift to generate 10">Simulate Transaction</button>
+        </div>
+
+        <div class="glass table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Txn ID</th>
+                        <th>Amount (INR)</th>
+                        <th>Score</th>
+                        <th>Tier</th>
+                        <th>Top Reasons</th>
+                    </tr>
+                </thead>
+                <tbody id="txnTableBody">
+                    <!-- Filled by JS -->
+                </tbody>
+            </table>
+        </div>
     </div>
-    
-    <script src="/static/main.js"></script>
+
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="modalOverlay"></div>
+    <div class="modal-panel" id="modalPanel">
+        <div class="modal-header">
+            <h2 id="modalTitle">Transaction Details</h2>
+            <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 1rem;">
+                <div>
+                    <div style="color: var(--text-secondary); font-size: 0.875rem;">Risk Score</div>
+                    <div id="modalScore" class="mono" style="font-size: 2rem; font-weight: 700;"></div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="color: var(--text-secondary); font-size: 0.875rem;">Tier</div>
+                    <div id="modalTier"></div>
+                </div>
+            </div>
+            
+            <h3 style="margin-top: 2rem; font-size: 1.125rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">SHAP Explanation</h3>
+            <p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">How each feature contributed to the final risk score.</p>
+            
+            <div class="waterfall-container" id="waterfallContainer">
+                <!-- Filled by JS -->
+            </div>
+            
+            <h3 style="margin-top: 2rem; font-size: 1.125rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Raw Features</h3>
+            <table style="width: 100%; margin-top: 1rem; font-size: 0.875rem;">
+                <tbody id="rawFeaturesTable">
+                    <!-- Filled by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
 </body>
 </html>
