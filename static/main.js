@@ -426,6 +426,40 @@ document.getElementById('tierFilters').addEventListener('click', e => {
     }
 });
 
+function generateRandomTxn() {
+    const isFraudPattern = Math.random() < 0.2; // 20% chance
+    
+    let txn = {
+        merchant_id: "MERCH_" + Math.floor(Math.random() * 1000).toString().padStart(4, '0'),
+        payment_method: ['upi', 'card', 'netbanking', 'wallet'][Math.floor(Math.random() * 4)],
+        amount_inr: Math.floor(Math.random() * 4900) + 100, // 100 - 5000
+        hour_of_day: Math.floor(Math.random() * 24),
+        merchant_txn_count_7d: Math.floor(Math.random() * 95) + 5, // 5 - 100
+        merchant_avg_amount_7d: Math.floor(Math.random() * 2500) + 500, // 500 - 3000
+        device_risk_score: parseFloat((Math.random() * 0.3).toFixed(2)), // 0.0 - 0.3 for normal
+        is_new_merchant: Math.random() < 0.1 ? 1 : 0 // 10% new normally
+    };
+
+    if (isFraudPattern) {
+        const pattern = Math.floor(Math.random() * 4) + 1;
+        if (pattern === 1) { // Late-night high-value UPI + new
+            txn.hour_of_day = Math.floor(Math.random() * 5); // 0-4
+            txn.amount_inr = Math.floor(Math.random() * 30000) + 20000; // 20k-50k
+            txn.payment_method = 'upi';
+            txn.is_new_merchant = 1;
+        } else if (pattern === 2) { // Velocity spike
+            txn.merchant_txn_count_7d = Math.floor(Math.random() * 150) + 150; // 150-300
+        } else if (pattern === 3) { // Amount z-score outlier
+            txn.amount_inr = Math.floor(Math.random() * 70000) + 80000; // 80k-150k
+        } else if (pattern === 4) { // High device risk + new
+            txn.device_risk_score = parseFloat((Math.random() * 0.1 + 0.9).toFixed(2)); // 0.9-1.0
+            txn.is_new_merchant = 1;
+        }
+    }
+    
+    return txn;
+}
+
 // Simulate Button
 document.getElementById('btnSimulate').addEventListener('click', async (e) => {
     const isBatch = e.shiftKey;
@@ -446,7 +480,7 @@ document.getElementById('btnSimulate').addEventListener('click', async (e) => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${jwtToken}`
                 },
-                body: JSON.stringify({}) // Assuming backend generates transaction context
+                body: JSON.stringify(generateRandomTxn())
             });
         }
         pollTransactions(); // Refresh immediately after simulation
@@ -456,6 +490,104 @@ document.getElementById('btnSimulate').addEventListener('click', async (e) => {
     
     btn.disabled = false;
     btn.textContent = 'Simulate Transaction';
+});
+
+// Manual Score Form Presets
+document.getElementById('presetSelect').addEventListener('change', (e) => {
+    const v = e.target.value;
+    if (v === 'pattern1') {
+        document.getElementById('m_hour_of_day').value = 2;
+        document.getElementById('m_amount_inr').value = 45000;
+        document.getElementById('m_payment_method').value = 'upi';
+        document.getElementById('m_is_new').checked = true;
+    } else if (v === 'pattern2') {
+        document.getElementById('m_txn_count_7d').value = 250;
+        document.getElementById('m_amount_inr').value = 1500;
+    } else if (v === 'pattern3') {
+        document.getElementById('m_amount_inr').value = 120000;
+    } else if (v === 'pattern4') {
+        document.getElementById('m_device_risk').value = 0.95;
+        document.getElementById('m_device_risk_val').textContent = "0.95";
+        document.getElementById('m_is_new').checked = true;
+    }
+});
+
+// Update range slider text
+document.getElementById('m_device_risk').addEventListener('input', (e) => {
+    document.getElementById('m_device_risk_val').textContent = parseFloat(e.target.value).toFixed(2);
+});
+
+// Submit Manual Score
+document.getElementById('manualScoreForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    // clear errors
+    ['merchant_id', 'payment_method', 'amount_inr', 'hour_of_day', 'merchant_txn_count_7d', 'merchant_avg_amount_7d', 'device_risk_score'].forEach(f => {
+        const errEl = document.getElementById('err_' + f);
+        if (errEl) errEl.textContent = '';
+    });
+    
+    const payload = {
+        merchant_id: document.getElementById('m_merchant_id').value,
+        payment_method: document.getElementById('m_payment_method').value,
+        amount_inr: parseFloat(document.getElementById('m_amount_inr').value),
+        hour_of_day: parseInt(document.getElementById('m_hour_of_day').value),
+        merchant_txn_count_7d: parseInt(document.getElementById('m_txn_count_7d').value),
+        merchant_avg_amount_7d: parseFloat(document.getElementById('m_avg_amount_7d').value),
+        device_risk_score: parseFloat(document.getElementById('m_device_risk').value),
+        is_new_merchant: document.getElementById('m_is_new').checked ? 1 : 0
+    };
+    
+    const btn = document.getElementById('btnManualScore');
+    btn.disabled = true;
+    btn.textContent = 'Scoring...';
+    
+    try {
+        const res = await fetch('/score-transaction', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwtToken}`
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+            // handle 422 errors
+            if (res.status === 422 && data.detail) {
+                data.detail.forEach(err => {
+                    const field = err.loc[err.loc.length - 1]; // get field name
+                    const errEl = document.getElementById('err_' + field);
+                    if (errEl) errEl.textContent = err.msg;
+                });
+            } else {
+                alert("Error scoring transaction: " + JSON.stringify(data));
+            }
+        } else {
+            // success
+            const resDiv = document.getElementById('manualScoreResult');
+            resDiv.style.display = 'block';
+            
+            document.getElementById('manualResultScore').textContent = data.risk_score.toFixed(4);
+            document.getElementById('manualResultScore').style.color = getScoreColor(data.risk_score);
+            
+            const tierEl = document.getElementById('manualResultTier');
+            tierEl.textContent = data.tier_label;
+            tierEl.style.color = data.tier_color;
+            
+            const ul = document.getElementById('manualResultReasons');
+            ul.innerHTML = data.top_reasons.map(r => `<li>${escapeHtml(r)}</li>`).join('');
+            
+            pollTransactions();
+        }
+    } catch(err) {
+        console.error("Manual scoring failed", err);
+    }
+    
+    btn.disabled = false;
+    btn.textContent = 'Score Transaction';
 });
 
 // Run

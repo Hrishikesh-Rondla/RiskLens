@@ -505,6 +505,92 @@
             <button id="btnSimulate" class="btn-primary" title="Hold Shift to generate 10">Simulate Transaction</button>
         </div>
 
+        <div class="panel glass" style="margin-bottom: 2rem; padding: 1.5rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="panel-title" style="margin-bottom: 0;">Score a Transaction (Manual)</div>
+                <select id="presetSelect" style="padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <option value="">-- Load fraud pattern example --</option>
+                    <option value="pattern1">Late-night high-value UPI (New Merchant)</option>
+                    <option value="pattern2">Velocity spike (High count)</option>
+                    <option value="pattern3">Amount z-score outlier</option>
+                    <option value="pattern4">High device risk + New Merchant</option>
+                </select>
+            </div>
+            
+            <form id="manualScoreForm" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Merchant ID</label>
+                    <input type="text" id="m_merchant_id" value="MERCH_DEMO_01" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <div id="err_merchant_id" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Payment Method</label>
+                    <select id="m_payment_method" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                        <option value="upi">upi</option>
+                        <option value="card">card</option>
+                        <option value="netbanking">netbanking</option>
+                        <option value="wallet">wallet</option>
+                    </select>
+                    <div id="err_payment_method" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Amount (INR)</label>
+                    <input type="number" id="m_amount_inr" value="1000" min="1" step="any" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <div id="err_amount_inr" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Hour of Day (0-23)</label>
+                    <input type="number" id="m_hour_of_day" value="14" min="0" max="23" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <div id="err_hour_of_day" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Merchant Txn Count (7d)</label>
+                    <input type="number" id="m_txn_count_7d" value="20" min="0" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <div id="err_merchant_txn_count_7d" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Merchant Avg Amount (7d)</label>
+                    <input type="number" id="m_avg_amount_7d" value="1000" min="0" step="any" style="width: 100%; padding: 0.5rem; border-radius: 6px; background: rgba(0,0,0,0.2); color: white; border: 1px solid var(--border-color);">
+                    <div id="err_merchant_avg_amount_7d" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div>
+                    <label style="display: block; font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 0.25rem;">Device Risk Score (0-1)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <input type="range" id="m_device_risk" value="0.2" min="0" max="1" step="0.05" style="flex: 1;">
+                        <span id="m_device_risk_val" class="mono" style="width: 2rem;">0.20</span>
+                    </div>
+                    <div id="err_device_risk_score" style="color: var(--color-block); font-size: 0.75rem; margin-top: 0.25rem;"></div>
+                </div>
+                <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; cursor: pointer; height: 38px;">
+                        <input type="checkbox" id="m_is_new" style="width: 16px; height: 16px;">
+                        New Merchant (< 7 days)
+                    </label>
+                </div>
+                
+                <div style="grid-column: 1 / -1; margin-top: 0.5rem;">
+                    <button type="submit" id="btnManualScore" class="btn-primary" style="width: 100%;">Score Transaction</button>
+                </div>
+            </form>
+            
+            <div id="manualScoreResult" style="display: none; margin-top: 1.5rem; padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Risk Score</div>
+                        <div id="manualResultScore" class="mono" style="font-size: 2rem; font-weight: 700;"></div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="color: var(--text-secondary); font-size: 0.875rem;">Tier</div>
+                        <div id="manualResultTier"></div>
+                    </div>
+                </div>
+                <div style="font-size: 0.875rem;">
+                    <div style="color: var(--text-secondary); margin-bottom: 0.5rem;">Top Reasons:</div>
+                    <ul id="manualResultReasons" style="padding-left: 1.5rem; color: var(--text-primary); line-height: 1.6;"></ul>
+                </div>
+            </div>
+        </div>
+
         <div class="glass table-container">
             <table>
                 <thead>
