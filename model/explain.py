@@ -337,17 +337,19 @@ def explain_prediction(
     # We use the actual feature values to generate context-aware reasons.
     feature_values = features.iloc[0]
     feature_impacts = []
+    other_payment_shap_sum = 0.0
+    
     for i, col in enumerate(_feature_columns):
         sv = float(shap_vals[i])
         feat_val = float(feature_values[col])
         
-        # Skip one-hot payment method columns where the value is 0.
-        # WHY? If payment_method_upi=0 (this txn is NOT UPI), the SHAP
-        # value for that column represents "the effect of NOT being UPI."
-        # Showing "Non-UPI decreased risk" is technically correct but
-        # confusing to a human reviewer. Instead, we only show the
-        # payment method that IS active (value=1).
+        # Unused one-hot categorical columns still carry a non-zero SHAP 
+        # contribution (e.g., "the fact that this is not a card" shifts 
+        # the model's prediction). Silently omitting them breaks the 
+        # fundamental SHAP additivity guarantee (base_value + sum(shap_values) 
+        # = log_odds_output). We aggregate them into a single entry instead.
         if col.startswith('payment_method_') and feat_val == 0:
+            other_payment_shap_sum += sv
             continue
         
         # Look up the plain-language description.
@@ -383,6 +385,15 @@ def explain_prediction(
             'feature': col,
             'shap_value': round(sv, 4),
             'reason': reason,
+        })
+        
+    # Append the aggregated other payment signals
+    if abs(other_payment_shap_sum) > 0.00001:
+        direction_phrase = 'positively (increasing risk)' if other_payment_shap_sum > 0 else 'negatively (decreasing risk)'
+        feature_impacts.append({
+            'feature': 'other_payment_signals',
+            'shap_value': round(other_payment_shap_sum, 4),
+            'reason': f'Other payment-method signals (methods not used in this transaction) contributed {direction_phrase} to the score',
         })
     
     # Sort by absolute SHAP value descending — the most impactful
