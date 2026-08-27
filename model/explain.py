@@ -143,13 +143,21 @@ FEATURE_DESCRIPTIONS = {
     },
     'device_risk_score': {
         'name': 'Device risk score',
-        'high': 'High device risk score (possible emulator/VPN) increased risk',
-        'low': 'Clean device profile decreased risk',
+        'high_increased': 'High device risk score (possible emulator/VPN) increased risk',
+        'high_decreased': 'High device risk score (possible emulator/VPN) decreased risk',
+        'low_increased': 'Clean device profile increased risk',
+        'low_decreased': 'Clean device profile decreased risk',
+        'value_aware': True,
+        'median': 0.5, # Fixed threshold for 0-1 scale
     },
     'is_new_merchant': {
         'name': 'Merchant age',
-        'high': 'New merchant (less than 7 days) increased risk',
-        'low': 'Established merchant decreased risk',
+        'high_increased': 'New merchant (less than 7 days) increased risk',
+        'high_decreased': 'New merchant (less than 7 days) decreased risk',
+        'low_increased': 'Established merchant increased risk',
+        'low_decreased': 'Established merchant decreased risk',
+        'value_aware': True,
+        'median': 1, # Boolean threshold (1 = new, 0 = established)
     },
     'payment_method_upi': {
         'name': 'Payment method (UPI)',
