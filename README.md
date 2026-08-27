@@ -118,6 +118,14 @@ Logged to in-memory store --> Dashboard polls and displays
 | human_review | 7.0% | 12.4% | Moderate-risk, routed to manual review |
 | auto_block | 3.3% | 51.0% | High confidence — 1 in 2 blocked txns is real fraud |
 
+### False-Positive Cost
+
+What does a false positive actually cost at each tier?
+- **`auto_block`**: 248 transactions were blocked on the test set, of which ~122 are legitimate transactions wrongly blocked (49% false-positive rate at this tier). A wrongly auto-blocked transaction means a lost sale, a frustrated customer, and potential reputational damage for the merchant. This is the tier where false positives are most expensive, since the transaction is stopped with no human in the loop.
+- **`human_review`**: 525 transactions were routed to review, of which ~460 are legitimate (87.6% false-positive rate at this tier). This is acceptable by design: this tier exists specifically to absorb uncertainty cheaply via a human reviewer, so a high false-positive rate here is a reasonable trade since the cost is reviewer time, not a lost transaction.
+
+Our explicit design trade-off was to set thresholds that prioritize catching fraud (recall) over minimizing false blocks (precision) in the `auto_block` tier. In a production system, these thresholds would be tuned against a real cost function weighing fraud loss against false-block cost, which is listed as a known limitation.
+
 ### Baseline Validation (Stage 2 — Kaggle "Give Me Some Credit")
 
 | Metric | Value |
