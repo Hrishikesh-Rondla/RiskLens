@@ -8,6 +8,8 @@ let transactions = [];
 let jwtToken = null;
 let currentFilter = 'all';
 let selectedTxnId = null;
+let currentAllowCeiling = 0.3;
+let currentBlockFloor = 0.7;
 
 // DOM Elements
 const statusBadge = document.getElementById('statusBadge');
@@ -17,8 +19,32 @@ const modalOverlay = document.getElementById('modalOverlay');
 const modalPanel = document.getElementById('modalPanel');
 const modalClose = document.getElementById('modalClose');
 
+// Load threshold state from localStorage
+function loadThresholds() {
+    const saved = localStorage.getItem('risklens_thresholds');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            currentAllowCeiling = parsed.allowCeiling;
+            currentBlockFloor = parsed.blockFloor;
+            
+            const allowSlider = document.getElementById('allowSlider');
+            const blockSlider = document.getElementById('blockSlider');
+            if (allowSlider && blockSlider) {
+                allowSlider.value = currentAllowCeiling;
+                blockSlider.value = currentBlockFloor;
+                document.getElementById('allowCeilVal').textContent = currentAllowCeiling.toFixed(2);
+                document.getElementById('blockFloorVal').textContent = currentBlockFloor.toFixed(2);
+            }
+        } catch (e) {
+            console.error("Failed to parse saved thresholds", e);
+        }
+    }
+}
+
 // Init
 async function init() {
+    loadThresholds();
     await fetchToken();
     if (jwtToken) {
         setConnected(true);
@@ -88,15 +114,27 @@ async function pollTransactions() {
     }
 }
 
+// Dynamic Client-Side Tier Recomputation
+function getRecomputedTier(score) {
+    if (score < currentAllowCeiling) {
+        return { id: 'auto_allow', label: 'Auto Allow', color: '#22c55e' };
+    } else if (score > currentBlockFloor) {
+        return { id: 'auto_block', label: 'Auto Block', color: '#ef4444' };
+    } else {
+        return { id: 'human_review', label: 'Human Review', color: '#f59e0b' };
+    }
+}
+
 // Update Stats Cards
 function updateStats() {
     const total = transactions.length;
     let allow = 0, review = 0, block = 0;
     
     transactions.forEach(t => {
-        if (t.tier === 'auto_allow') allow++;
-        else if (t.tier === 'human_review') review++;
-        else if (t.tier === 'auto_block') block++;
+        const tier = getRecomputedTier(t.risk_score);
+        if (tier.id === 'auto_allow') allow++;
+        else if (tier.id === 'human_review') review++;
+        else if (tier.id === 'auto_block') block++;
     });
 
     document.getElementById('statTotal').textContent = total;
@@ -122,7 +160,10 @@ function renderTable() {
     
     const filtered = currentFilter === 'all' 
         ? transactions 
-        : transactions.filter(t => t.tier === currentFilter);
+        : transactions.filter(t => {
+            const recomputed = getRecomputedTier(t.risk_score);
+            return recomputed.id === currentFilter;
+        });
         
     // Sort descending by time (assuming ID roughly correlates or just list order)
     filtered.forEach(txn => {
@@ -131,6 +172,8 @@ function renderTable() {
         
         const date = new Date(txn.scored_at).toLocaleTimeString();
         const scoreColor = getScoreColor(txn.risk_score);
+        
+        const tier = getRecomputedTier(txn.risk_score);
         
         // Reasons
         const reasonsHtml = (txn.top_reasons || []).map(r => 
@@ -143,8 +186,8 @@ function renderTable() {
             <td class="mono">₹${txn.amount_inr.toLocaleString()}</td>
             <td class="mono" style="color: ${scoreColor}">${txn.risk_score.toFixed(3)}</td>
             <td>
-                <span class="tier-badge" style="background-color: ${escapeHtml(txn.tier_color)}20; color: ${escapeHtml(txn.tier_color)}; border: 1px solid ${escapeHtml(txn.tier_color)}40">
-                    ${escapeHtml(txn.tier_label)}
+                <span class="tier-badge" style="background-color: ${tier.color}20; color: ${tier.color}; border: 1px solid ${tier.color}40">
+                    ${escapeHtml(tier.label)}
                 </span>
             </td>
             <td>${reasonsHtml}</td>
@@ -162,9 +205,10 @@ function openModal(txn) {
     scoreEl.textContent = txn.risk_score.toFixed(3);
     scoreEl.style.color = getScoreColor(txn.risk_score);
     
+    const tier = getRecomputedTier(txn.risk_score);
     document.getElementById('modalTier').innerHTML = `
-        <span class="tier-badge" style="background-color: ${escapeHtml(txn.tier_color)}20; color: ${escapeHtml(txn.tier_color)}; border: 1px solid ${escapeHtml(txn.tier_color)}40; font-size: 1rem;">
-            ${escapeHtml(txn.tier_label)}
+        <span class="tier-badge" style="background-color: ${tier.color}20; color: ${tier.color}; border: 1px solid ${tier.color}40; font-size: 1rem;">
+            ${escapeHtml(tier.label)}
         </span>
     `;
     
@@ -344,8 +388,18 @@ function handleSliderChange() {
     allowVal.textContent = a.toFixed(2);
     blockVal.textContent = b.toFixed(2);
     
+    // Persist and apply globally
+    currentAllowCeiling = a;
+    currentBlockFloor = b;
+    localStorage.setItem('risklens_thresholds', JSON.stringify({
+        allowCeiling: a,
+        blockFloor: b
+    }));
+    
+    updateStats(); // Update top cards instantly
+    renderTable(); // Update row tiering instantly
     renderHistogram(); // Instant update of colors
-    debouncedSimulate(); // API call
+    debouncedSimulate(); // API call for aggregate logic if any
 }
 
 allowSlider.addEventListener('input', handleSliderChange);
