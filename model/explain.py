@@ -124,8 +124,12 @@ FEATURE_DESCRIPTIONS = {
     },
     'hour_of_day': {
         'name': 'Transaction hour',
-        'high': 'Transaction during unusual hours (late night) increased risk',
-        'low': 'Transaction during business hours decreased risk',
+        'high_increased': 'Transaction during unusual hours (late night) increased risk',
+        'high_decreased': 'Transaction during unusual hours (late night) decreased risk',
+        'low_increased': 'Transaction during normal business hours increased risk',
+        'low_decreased': 'Transaction during normal business hours decreased risk',
+        'value_aware': True,
+        'is_high_func': lambda h: h < 6 or h >= 22, # Late night definition
     },
     'merchant_txn_count_7d': {
         'name': 'Weekly transaction count',
@@ -138,8 +142,12 @@ FEATURE_DESCRIPTIONS = {
     },
     'merchant_avg_amount_7d': {
         'name': "Merchant's average transaction amount",
-        'high': "Transaction deviates from merchant's typical amount pattern, increasing risk",
-        'low': "Transaction aligns with merchant's typical amount pattern, decreasing risk",
+        'high_increased': "Merchant's high historical average transaction size increased risk",
+        'high_decreased': "Merchant's high historical average transaction size decreased risk",
+        'low_increased': "Merchant's low historical average transaction size increased risk",
+        'low_decreased': "Merchant's low historical average transaction size decreased risk",
+        'value_aware': True,
+        'median': 1096.11, # Precomputed median
     },
     'device_risk_score': {
         'name': 'Device risk score',
@@ -354,14 +362,16 @@ def explain_prediction(
         # "New merchant". The direction tells the reviewer whether to
         # focus on this feature or dismiss it.
         #
-        # For value-aware features (amount_inr, merchant_txn_count_7d),
-        # the magnitude word (high/low) comes from the actual feature
-        # value vs the dataset median, and the directional word
-        # (increased/decreased) comes from the SHAP sign. This prevents
-        # mislabeling — e.g. amount_inr=500 should never say "Unusually
-        # high transaction amount" regardless of SHAP sign.
+        # For value-aware features, the magnitude word (high/low) comes
+        # from the actual feature value vs the dataset median or custom
+        # logic, and the directional word (increased/decreased) comes
+        # from the SHAP sign. This prevents mislabeling.
         if desc.get('value_aware'):
-            magnitude = 'high' if feat_val >= desc['median'] else 'low'
+            if 'is_high_func' in desc:
+                magnitude = 'high' if desc['is_high_func'](feat_val) else 'low'
+            else:
+                magnitude = 'high' if feat_val >= desc['median'] else 'low'
+            
             direction = 'increased' if sv > 0 else 'decreased'
             reason = desc[f'{magnitude}_{direction}']
         elif sv > 0:
